@@ -1,0 +1,4 @@
+flaml[automl]
+autogen-agentchat[gemini]~=0.2
+
+python 3.10
