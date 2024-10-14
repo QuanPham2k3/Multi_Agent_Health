@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="gemini_1.5_pro",
+        default="gemini_1.5_flash",
         #default="x_gpt35_turbo",
         choices=["gemini_1.5_flash002", "gemini_1.5_flash", "gemini_1.5_pro"],
         #choices=["x_gpt35_turbo", "x_gpt4_turbo", "x_gpt4o"],

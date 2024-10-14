@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="gemini_1.5_pro", #"x_gpt4o",
+        default="gemini_1.5_flash", #"x_gpt4o",
         choices= ["gemini_1.5_flash002", "gemini_1.5_flash", "gemini_1.5_pro"],#["x_gpt35_turbo", "x_gpt4_turbo", "x_gpt4o"],
         help="the llm models",
     )
@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="output/openai-gpt-3.5-turbo/3-3/inital",
+        default= "output/gemini_1.5_flash/3-3/inital",#"output/openai-gpt-3.5-turbo/3-3/inital",
         help="log file",
     )
 

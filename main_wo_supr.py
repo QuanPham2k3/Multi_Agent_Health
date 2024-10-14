@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument(
         "--query_model_name",
         type=str,
-        default="gemini_1.5_pro",
+        default="gemini_1.5_flash",
         choices=["gemini_1.5_flash002", "gemini_1.5_flash", "gemini_1.5_pro"],
         #choices=["x_gpt35_turbo", "x_gpt4_turbo", "x_gpt4o"],
         help="the llm models",
