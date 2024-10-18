@@ -38,15 +38,15 @@ def parse_args():
     parser.add_argument(
         "--model_name",
         type=str,
-        default=  "gemini_1.5_flash002", #"x_gpt35_turbo",
+        default=  "llama3.1", #"x_gpt35_turbo",
         choices= ["gemini_1.5_flash002", "gemini_1.5_flash", "gemini_1.5_pro"], #["x_gpt35_turbo", "x_gpt4_turbo", "x_gpt4o"],
         help="the llm models",
     )
     parser.add_argument(
         "--dataset_name",
         type=str,
-        default= "rare_disease_302",
-        choices=["rare_disease_302"],
+        default="rare_disease_110_test",
+        choices=["rare_disease_110"],
         help="choice different dataset",
     )
     parser.add_argument(
@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument(
         "--times",
         type=int,
-        default=1,
+        default=2,
         choices=[1, 2, 3],
         help="choice different stages",
     )
@@ -71,9 +71,9 @@ def parse_args():
         help="log file",
     )
     parser.add_argument(
-        "--num_specialists", type=int, default=4, help="number of experts" #3
+        "--num_specialists", type=int, default=3, help="number of experts"
     )
-    parser.add_argument("--n_round", type=int, default=10, help="attempt_vote") #13
+    parser.add_argument("--n_round", type=int, default=13, help="attempt_vote")
     parser.add_argument("--query_round", type=int, default=1, help="query times")
 
     args = parser.parse_args()
@@ -81,12 +81,11 @@ def parse_args():
     return args
 
 
-# 172
-@simple_retry(max_attempts=30, delay=1)
+@simple_retry(max_attempts=40, delay=2)
 def process_single_case(
     args, dataset, idx, output_dir, model_config, query_model_config
 ):
-    case_cost = 0.0
+    #case_cost = 0.0
     case_info = {}
 
     (
@@ -103,7 +102,7 @@ def process_single_case(
 
     output_dir = osp.join(
         output_dir,
-        "MAC_WS",
+        "MAC_WS_en_1",
         args.stage,
         args.model_name,
         identify,
@@ -129,14 +128,14 @@ def process_single_case(
 
     coordinator = ConversableAgent(
         "Medical_Coordinator",
-        system_message="Bạn là Điều phối viên Y tế. Vai trò của bạn là cung cấp lịch sử y tế của bệnh nhân và đặt câu hỏi để xác định chẩn đoán phù hợp. Bạn nên tìm kiếm sự làm rõ và đảm bảo rằng tất cả các thông tin liên quan đều được bao quát.",
+        system_message="You are a Medical Coordinator. Your role is to provide the patient's medical history and ask questions to determine the appropriate specialist. You should seek clarification and ensure all relevant information is covered.",
         llm_config=query_model_config,
         human_input_mode="NEVER",  # Never ask for human input.
     )
 
     consultant = ConversableAgent(
         "Senior_Medical_Consultant",
-        system_message="Bạn là Chuyên gia Y tế Cao cấp. Vai trò của bạn là trả lời các câu hỏi của Điều phối viên Y tế, đề xuất chẩn đoán phù hợp dựa trên lịch sử y tế được cung cấp, và sửa chữa bất kỳ hiểu lầm nào.",
+        system_message="You are a Senior Medical Consultant. Your role is to answer the Medical Coordinator's questions, recommend the appropriate specialist based on the medical history provided, and correct any misconceptions.",
         llm_config=query_model_config,
         human_input_mode="NEVER",  # Never ask for human input.
     )
@@ -150,7 +149,7 @@ def process_single_case(
         "top_k_specialists"
     ]
     assert len(top_k_specialists) == args.num_specialists
-    case_cost += result.cost["usage_including_cached_inference"]["total_cost"]
+    # case_cost += result.cost["usage_including_cached_inference"]["total_cost"]
 
     Docs = []
     for specialist in top_k_specialists:
@@ -171,7 +170,7 @@ def process_single_case(
     )
 
     Supervisor = AssistantAgent(
-        name="Giám sát viên",
+        name="Supervisor",
         llm_config=model_config,
         system_message=supervisor_system_message,
     )
@@ -182,7 +181,7 @@ def process_single_case(
         messages=[],
         max_round=args.n_round,
         speaker_selection_method="auto",  #"auto" or "round_robin": 下一个发言者以循环方式选择，即按照agents中提供的顺序进行迭代.  效果不太理想，需要更改prompt
-        admin_name="Admim",
+        admin_name="Critic",
         select_speaker_auto_verbose=False,
         allow_repeat_speaker=True,
         send_introductions=False,
@@ -205,44 +204,42 @@ def process_single_case(
     #case cost
     # for agent in agents:
     #     case_cost += agent.client.total_usage_summary ['total_cost']
-
+        
     # Save the complete conversation
     conversation_path = osp.join(output_dir, conversation_name)
-    with open(conversation_path, "w", encoding="utf-8") as file:
-        json.dump(output.chat_history, file, indent=4, ensure_ascii=False)
+    with open(conversation_path, "w") as file:
+        json.dump(output.chat_history, file, indent=4)
 
 
     critic_output = [
         item
         for i, item in enumerate(output.chat_history)
         if item.get("name") == None
-        and '"Chẩn đoán có khả năng nhất":' in item.get("content")
+        and '"Most Likely Diagnosis":' in item.get("content")
     ]
 
     syn_report = critic_output[-1]["content"]
 
     json_output = prase_json(syn_report)
-    
+
     case_info["Type"] = case_type
     case_info["Crl"] = case_crl
     #case_info["Cost"] = case_cost
     case_info["Presentation"] = case_presentation
     case_info["Name"] = case_name
-    case_info["Chẩn đoán có khả năng nhất"] = json_output.get("Chẩn đoán có khả năng nhất")
-    case_info["Chẩn đoán liên quan"] = json_output.get("Chẩn đoán liên quan") or json_output.get(
-        "Chẩn đoán có liên quan"
+    case_info["Most Likely"] = json_output.get("Most Likely Diagnosis")
+    case_info["Other Possible"] = json_output.get("Differential") or json_output.get(
+        "Differential Diagnosis"
     )
 
     if args.stage == "inital":
-        case_info["Xét nghiệm được đề xuất"] = json_output.get(
-            "Xét nghiệm được đề xuất"
-        ) or json_output.get("Xét nghiệm đề xuất")
+        case_info["Recommend Tests"] = json_output.get(
+            "Recommend Tests"
+        ) or json_output.get("Recommended Tests")
 
     recorder_path = osp.join(output_dir, json_name)
-    
-
-    with open(recorder_path, "w", encoding="utf-8") as file:
-        json.dump(case_info, file, indent=4, ensure_ascii=False)
+    with open(recorder_path, "w") as file:
+        json.dump(case_info, file, indent=4)
 
 
 def main():
@@ -276,7 +273,7 @@ def main():
 
     model_config = {
         "cache_seed": None,
-        "temperature": 0,
+        "temperature": 1,
         "config_list": config_list,
         "timeout": 300,
     }
@@ -300,5 +297,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
